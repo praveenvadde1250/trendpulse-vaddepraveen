@@ -1,137 +1,77 @@
-
-import requests
-import time
-import json
+import pandas as pd
+import numpy as np
 import os
-from datetime import datetime
 
 # ---------------------------------------------
-# CONFIGURATION
+# STEP 1 — LOAD AND EXPLORE
 # ---------------------------------------------
 
-BASE_URL = "https://hacker-news.firebaseio.com/v0"
-HEADERS = {"User-Agent": "TrendPulse/1.0"}
-MAX_STORIES_PER_CATEGORY = 25
+file_path = "/content/trendpulse-vaddepraveen/data/trends_clean.csv"
 
-CATEGORIES = {
-    "technology": ["ai", "software", "tech", "code", "computer", "data", "cloud", "api", "gpu", "llm"],
-    "worldnews": ["war", "government", "country", "president", "election", "climate", "attack", "global"],
-    "sports": ["nfl", "nba", "fifa", "sport", "game", "team", "player", "league", "championship"],
-    "science": ["research", "study", "space", "physics", "biology", "discovery", "nasa", "genome"],
-    "entertainment": ["movie", "film", "music", "netflix", "game", "book", "show", "award", "streaming"]
-}
+# Load CSV
+df = pd.read_csv(file_path)
 
-# ---------------------------------------------
-# FUNCTIONS
-# ---------------------------------------------
+# Print shape
+print(f"Loaded data: {df.shape}")
 
-def fetch_top_story_ids():
-    try:
-        url = f"{BASE_URL}/topstories.json"
-        response = requests.get(url, headers=HEADERS)
-        response.raise_for_status()
-        return response.json()[:500]
-    except Exception as e:
-        print(f"Error fetching top stories: {e}")
-        return []
+# First 5 rows
+print("\nFirst 5 rows:")
+print(df.head())
 
+# Average values
+avg_score = df["score"].mean()
+avg_comments = df["num_comments"].mean()
 
-def fetch_story_details(story_id):
-    try:
-        url = f"{BASE_URL}/item/{story_id}.json"
-        response = requests.get(url, headers=HEADERS)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        print(f"Error fetching story {story_id}: {e}")
-        return None
-
-
-def assign_category(title):
-    if not title:
-        return None
-
-    title = title.lower()
-
-    for category, keywords in CATEGORIES.items():
-        for keyword in keywords:
-            if keyword in title:
-                return category
-
-    return None
-
+print(f"\nAverage score   : {avg_score:.0f}")
+print(f"Average comments: {avg_comments:.0f}")
 
 # ---------------------------------------------
-# MAIN EXECUTION
+# STEP 2 — NUMPY ANALYSIS
 # ---------------------------------------------
 
-def main():
-    story_ids = fetch_top_story_ids()
+scores = df["score"].values
+comments = df["num_comments"].values
 
-    if not story_ids:
-        print("No stories fetched. Exiting...")
-        return
+print("\n--- NumPy Stats ---")
 
-    collected_stories = []
-    category_count = {cat: 0 for cat in CATEGORIES}
+# Mean, Median, Std
+print(f"Mean score   : {np.mean(scores):.0f}")
+print(f"Median score : {np.median(scores):.0f}")
+print(f"Std deviation: {np.std(scores):.0f}")
 
-    # Loop through each category
-    for category in CATEGORIES:
-        print(f"Processing category: {category}")
+# Max & Min
+print(f"Max score    : {np.max(scores)}")
+print(f"Min score    : {np.min(scores)}")
 
-        for story_id in story_ids:
+# Category with most stories
+category_counts = df["category"].value_counts()
+top_category = category_counts.idxmax()
+top_count = category_counts.max()
 
-            if category_count[category] >= MAX_STORIES_PER_CATEGORY:
-                break
+print(f"\nMost stories in: {top_category} ({top_count} stories)")
 
-            story = fetch_story_details(story_id)
+# Most commented story
+max_comments_idx = np.argmax(comments)
+top_story_title = df.iloc[max_comments_idx]["title"]
+top_story_comments = comments[max_comments_idx]
 
-            if not story:
-                continue
-
-            title = story.get("title", "")
-            detected_category = assign_category(title)
-
-            if detected_category == category:
-
-                story_data = {
-                    "post_id": story.get("id"),
-                    "title": title,
-                    "category": category,
-                    "score": story.get("score", 0),
-                    "num_comments": story.get("descendants", 0),
-                    "author": story.get("by", "unknown"),
-                    "collected_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                }
-
-                collected_stories.append(story_data)
-                category_count[category] += 1
-
-        # Required delay after each category
-        time.sleep(2)
-
-    # ---------------------------------------------
-    # SAVE TO JSON
-    # ---------------------------------------------
-
-    os.makedirs("data", exist_ok=True)
-
-    today_str = datetime.now().strftime('%Y%m%d')
-    filename = f"data/trends_{today_str}.json"
-
-    with open(filename, "w", encoding="utf-8") as file:
-        json.dump(collected_stories, file, indent=4)
-
-    # ---------------------------------------------
-    # FINAL OUTPUT (MATCHES REQUIREMENT EXACTLY)
-    # ---------------------------------------------
-
-    print(f"Collected {len(collected_stories)} stories. Saved to {filename}")
-
+print(f'\nMost commented story: "{top_story_title}" — {top_story_comments} comments')
 
 # ---------------------------------------------
-# RUN SCRIPT
+# STEP 3 — ADD NEW COLUMNS
 # ---------------------------------------------
 
-if __name__ == "__main__":
-    main()
+# Engagement = num_comments / (score + 1)
+df["engagement"] = df["num_comments"] / (df["score"] + 1)
+
+# is_popular = score > average score
+df["is_popular"] = df["score"] > avg_score
+
+# ---------------------------------------------
+# STEP 4 — SAVE RESULT
+# ---------------------------------------------
+
+output_file = "data/trends_analysed.csv"
+df.to_csv(output_file, index=False)
+
+print(f"\nSaved to {output_file}")
