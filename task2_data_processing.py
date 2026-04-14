@@ -1,600 +1,69 @@
-{
-  "nbformat": 4,
-  "nbformat_minor": 0,
-  "metadata": {
-    "colab": {
-      "provenance": [],
-      "authorship_tag": "ABX9TyPaBzvx7xftmPjUY/1ysqmD",
-      "include_colab_link": true
-    },
-    "kernelspec": {
-      "name": "python3",
-      "display_name": "Python 3"
-    },
-    "language_info": {
-      "name": "python"
-    }
-  },
-  "cells": [
-    {
-      "cell_type": "markdown",
-      "metadata": {
-        "id": "view-in-github",
-        "colab_type": "text"
-      },
-      "source": [
-        "<a href=\"https://colab.research.google.com/github/praveenvadde1250/trendpulse-vaddepraveen/blob/main/task2_data_processing_py.ipynb\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
-      ]
-    },
-    {
-      "cell_type": "code",
-      "execution_count": 6,
-      "metadata": {
-        "colab": {
-          "base_uri": "https://localhost:8080/"
-        },
-        "id": "aXQTdISRInoT",
-        "outputId": "8dbfe3bd-7ecb-4c12-b35f-5486f0b1a2fb"
-      },
-      "outputs": [
-        {
-          "output_type": "stream",
-          "name": "stdout",
-          "text": [
-            "Processing category: technology\n",
-            "Processing category: worldnews\n",
-            "Processing category: sports\n",
-            "Processing category: science\n",
-            "Processing category: entertainment\n",
-            "Collected 84 stories. Saved to data/trends_20260413.json\n"
-          ]
-        }
-      ],
-      "source": [
-        "import requests\n",
-        "import time\n",
-        "import json\n",
-        "import os\n",
-        "from datetime import datetime\n",
-        "\n",
-        "# ---------------------------------------------\n",
-        "# CONFIGURATION\n",
-        "# ---------------------------------------------\n",
-        "\n",
-        "BASE_URL = \"https://hacker-news.firebaseio.com/v0\"\n",
-        "HEADERS = {\"User-Agent\": \"TrendPulse/1.0\"}\n",
-        "MAX_STORIES_PER_CATEGORY = 25\n",
-        "\n",
-        "CATEGORIES = {\n",
-        "    \"technology\": [\"ai\", \"software\", \"tech\", \"code\", \"computer\", \"data\", \"cloud\", \"api\", \"gpu\", \"llm\"],\n",
-        "    \"worldnews\": [\"war\", \"government\", \"country\", \"president\", \"election\", \"climate\", \"attack\", \"global\"],\n",
-        "    \"sports\": [\"nfl\", \"nba\", \"fifa\", \"sport\", \"game\", \"team\", \"player\", \"league\", \"championship\"],\n",
-        "    \"science\": [\"research\", \"study\", \"space\", \"physics\", \"biology\", \"discovery\", \"nasa\", \"genome\"],\n",
-        "    \"entertainment\": [\"movie\", \"film\", \"music\", \"netflix\", \"game\", \"book\", \"show\", \"award\", \"streaming\"]\n",
-        "}\n",
-        "\n",
-        "# ---------------------------------------------\n",
-        "# FUNCTIONS\n",
-        "# ---------------------------------------------\n",
-        "\n",
-        "def fetch_top_story_ids():\n",
-        "    try:\n",
-        "        url = f\"{BASE_URL}/topstories.json\"\n",
-        "        response = requests.get(url, headers=HEADERS)\n",
-        "        response.raise_for_status()\n",
-        "        return response.json()[:500]\n",
-        "    except Exception as e:\n",
-        "        print(f\"Error fetching top stories: {e}\")\n",
-        "        return []\n",
-        "\n",
-        "\n",
-        "def fetch_story_details(story_id):\n",
-        "    try:\n",
-        "        url = f\"{BASE_URL}/item/{story_id}.json\"\n",
-        "        response = requests.get(url, headers=HEADERS)\n",
-        "        response.raise_for_status()\n",
-        "        return response.json()\n",
-        "    except Exception as e:\n",
-        "        print(f\"Error fetching story {story_id}: {e}\")\n",
-        "        return None\n",
-        "\n",
-        "\n",
-        "def assign_category(title):\n",
-        "    if not title:\n",
-        "        return None\n",
-        "\n",
-        "    title = title.lower()\n",
-        "\n",
-        "    for category, keywords in CATEGORIES.items():\n",
-        "        for keyword in keywords:\n",
-        "            if keyword in title:\n",
-        "                return category\n",
-        "\n",
-        "    return None\n",
-        "\n",
-        "\n",
-        "# ---------------------------------------------\n",
-        "# MAIN EXECUTION\n",
-        "# ---------------------------------------------\n",
-        "\n",
-        "def main():\n",
-        "    story_ids = fetch_top_story_ids()\n",
-        "\n",
-        "    if not story_ids:\n",
-        "        print(\"No stories fetched. Exiting...\")\n",
-        "        return\n",
-        "\n",
-        "    collected_stories = []\n",
-        "    category_count = {cat: 0 for cat in CATEGORIES}\n",
-        "\n",
-        "    # Loop through each category\n",
-        "    for category in CATEGORIES:\n",
-        "        print(f\"Processing category: {category}\")\n",
-        "\n",
-        "        for story_id in story_ids:\n",
-        "\n",
-        "            if category_count[category] >= MAX_STORIES_PER_CATEGORY:\n",
-        "                break\n",
-        "\n",
-        "            story = fetch_story_details(story_id)\n",
-        "\n",
-        "            if not story:\n",
-        "                continue\n",
-        "\n",
-        "            title = story.get(\"title\", \"\")\n",
-        "            detected_category = assign_category(title)\n",
-        "\n",
-        "            if detected_category == category:\n",
-        "\n",
-        "                story_data = {\n",
-        "                    \"post_id\": story.get(\"id\"),\n",
-        "                    \"title\": title,\n",
-        "                    \"category\": category,\n",
-        "                    \"score\": story.get(\"score\", 0),\n",
-        "                    \"num_comments\": story.get(\"descendants\", 0),\n",
-        "                    \"author\": story.get(\"by\", \"unknown\"),\n",
-        "                    \"collected_at\": datetime.now().strftime(\"%Y-%m-%d %H:%M:%S\")\n",
-        "                }\n",
-        "\n",
-        "                collected_stories.append(story_data)\n",
-        "                category_count[category] += 1\n",
-        "\n",
-        "        # Required delay after each category\n",
-        "        time.sleep(2)\n",
-        "\n",
-        "    # ---------------------------------------------\n",
-        "    # SAVE TO JSON\n",
-        "    # ---------------------------------------------\n",
-        "\n",
-        "    os.makedirs(\"data\", exist_ok=True)\n",
-        "\n",
-        "    today_str = datetime.now().strftime('%Y%m%d')\n",
-        "    filename = f\"data/trends_{today_str}.json\"\n",
-        "\n",
-        "    with open(filename, \"w\", encoding=\"utf-8\") as file:\n",
-        "        json.dump(collected_stories, file, indent=4)\n",
-        "\n",
-        "    # ---------------------------------------------\n",
-        "    # FINAL OUTPUT (MATCHES REQUIREMENT EXACTLY)\n",
-        "    # ---------------------------------------------\n",
-        "\n",
-        "    print(f\"Collected {len(collected_stories)} stories. Saved to {filename}\")\n",
-        "\n",
-        "\n",
-        "# ---------------------------------------------\n",
-        "# RUN SCRIPT\n",
-        "# ---------------------------------------------\n",
-        "\n",
-        "if __name__ == \"__main__\":\n",
-        "    main()"
-      ]
-    },
-    {
-      "cell_type": "markdown",
-      "metadata": {
-        "id": "c21775c5"
-      },
-      "source": [
-        "### Step 1: Set up your GitHub Personal Access Token (PAT)\n",
-        "\n",
-        "To push to GitHub, you'll need a Personal Access Token (PAT). If you don't have one, you can generate it from your GitHub settings (Settings > Developer settings > Personal access tokens).\n",
-        "\n",
-        "**Important:** For security reasons, store your PAT in Colab's secrets manager. Click the '🔑' icon on the left sidebar, add a new secret, and name it `GH_TOKEN`. Paste your PAT as the value. Make sure 'Notebook access' is enabled for this secret."
-      ]
-    },
-    {
-      "cell_type": "code",
-      "metadata": {
-        "colab": {
-          "base_uri": "https://localhost:8080/"
-        },
-        "id": "d780cde0",
-        "outputId": "e1ba5b1b-9dee-44fa-a132-185ab64e5f4b"
-      },
-      "source": [
-        "# Import necessary libraries\n",
-        "from google.colab import userdata\n",
-        "import os\n",
-        "import shutil\n",
-        "import re # Import regex for repository name extraction\n",
-        "\n",
-        "# Configure Git with your user name and email\n",
-        "# Replace with your actual GitHub username and email\n",
-        "!git config --global user.name \"praveenvadde1250\"\n",
-        "!git config --global user.email \"praveen.vadde1250@gmail.com\"\n",
-        "\n",
-        "# Get GitHub token from Colab secrets\n",
-        "GH_TOKEN = userdata.get('GH_TOKEN')\n",
-        "\n",
-        "# --- IMPORTANT: Provide your GitHub repository URL here ---\n",
-        "# It should look like \"https://github.com/your-username/your-repo-name.git\"\n",
-        "github_repo_url = \"https://github.com/praveenvadde1250/trendpulse-vaddepraveen\"\n",
-        "\n",
-        "# Extract repository name from the URL to use as local directory name\n",
-        "# Example: from 'https://github.com/user/repo.git' extracts 'repo'\n",
-        "match = re.search(r'/([^/]+?)(?:\\.git)?$', github_repo_url)\n",
-        "if match:\n",
-        "    repo_name = match.group(1)\n",
-        "else:\n",
-        "    # Fallback if URL format is unexpected\n",
-        "    repo_name = \"trendpulse-vaddepraveen\"\n",
-        "\n",
-        "repo_dir = repo_name\n",
-        "\n",
-        "# Construct the URL with token for cloning\n",
-        "repo_with_token = github_repo_url.replace(\"https://\", f\"https://oauth2:{GH_TOKEN}@\")\n",
-        "\n",
-        "# Remove existing local repo directory if it exists, for a clean clone\n",
-        "if os.path.exists(repo_dir):\n",
-        "    print(f\"Removing existing directory '{repo_dir}'...\")\n",
-        "    shutil.rmtree(repo_dir)\n",
-        "\n",
-        "# Clone the repository\n",
-        "print(f\"Cloning {github_repo_url} into '{repo_dir}'...\")\n",
-        "!git clone {repo_with_token} {repo_dir}\n",
-        "\n",
-        "# Save the content of the main script cell to a file\n",
-        "main_script_content = \"\"\"\n",
-        "import requests\n",
-        "import time\n",
-        "import json\n",
-        "import os\n",
-        "from datetime import datetime\n",
-        "\n",
-        "# ---------------------------------------------\n",
-        "# CONFIGURATION\n",
-        "# ---------------------------------------------\n",
-        "\n",
-        "BASE_URL = \"https://hacker-news.firebaseio.com/v0\"\n",
-        "HEADERS = {\"User-Agent\": \"TrendPulse/1.0\"}\n",
-        "MAX_STORIES_PER_CATEGORY = 25\n",
-        "\n",
-        "CATEGORIES = {\n",
-        "    \"technology\": [\"ai\", \"software\", \"tech\", \"code\", \"computer\", \"data\", \"cloud\", \"api\", \"gpu\", \"llm\"],\n",
-        "    \"worldnews\": [\"war\", \"government\", \"country\", \"president\", \"election\", \"climate\", \"attack\", \"global\"],\n",
-        "    \"sports\": [\"nfl\", \"nba\", \"fifa\", \"sport\", \"game\", \"team\", \"player\", \"league\", \"championship\"],\n",
-        "    \"science\": [\"research\", \"study\", \"space\", \"physics\", \"biology\", \"discovery\", \"nasa\", \"genome\"],\n",
-        "    \"entertainment\": [\"movie\", \"film\", \"music\", \"netflix\", \"game\", \"book\", \"show\", \"award\", \"streaming\"]\n",
-        "}\n",
-        "\n",
-        "# ---------------------------------------------\n",
-        "# FUNCTIONS\n",
-        "# ---------------------------------------------\n",
-        "\n",
-        "def fetch_top_story_ids():\n",
-        "    try:\n",
-        "        url = f\"{BASE_URL}/topstories.json\"\n",
-        "        response = requests.get(url, headers=HEADERS)\n",
-        "        response.raise_for_status()\n",
-        "        return response.json()[:500]\n",
-        "    except Exception as e:\n",
-        "        print(f\"Error fetching top stories: {e}\")\n",
-        "        return []\n",
-        "\n",
-        "\n",
-        "def fetch_story_details(story_id):\n",
-        "    try:\n",
-        "        url = f\"{BASE_URL}/item/{story_id}.json\"\n",
-        "        response = requests.get(url, headers=HEADERS)\n",
-        "        response.raise_for_status()\n",
-        "        return response.json()\n",
-        "    except Exception as e:\n",
-        "        print(f\"Error fetching story {story_id}: {e}\")\n",
-        "        return None\n",
-        "\n",
-        "\n",
-        "def assign_category(title):\n",
-        "    if not title:\n",
-        "        return None\n",
-        "\n",
-        "    title = title.lower()\n",
-        "\n",
-        "    for category, keywords in CATEGORIES.items():\n",
-        "        for keyword in keywords:\n",
-        "            if keyword in title:\n",
-        "                return category\n",
-        "\n",
-        "    return None\n",
-        "\n",
-        "\n",
-        "# ---------------------------------------------\n",
-        "# MAIN EXECUTION\n",
-        "# ---------------------------------------------\n",
-        "\n",
-        "def main():\n",
-        "    story_ids = fetch_top_story_ids()\n",
-        "\n",
-        "    if not story_ids:\n",
-        "        print(\"No stories fetched. Exiting...\")\n",
-        "        return\n",
-        "\n",
-        "    collected_stories = []\n",
-        "    category_count = {cat: 0 for cat in CATEGORIES}\n",
-        "\n",
-        "    # Loop through each category\n",
-        "    for category in CATEGORIES:\n",
-        "        print(f\"Processing category: {category}\")\n",
-        "\n",
-        "        for story_id in story_ids:\n",
-        "\n",
-        "            if category_count[category] >= MAX_STORIES_PER_CATEGORY:\n",
-        "                break\n",
-        "\n",
-        "            story = fetch_story_details(story_id)\n",
-        "\n",
-        "            if not story:\n",
-        "                continue\n",
-        "\n",
-        "            title = story.get(\"title\", \"\")\n",
-        "            detected_category = assign_category(title)\n",
-        "\n",
-        "            if detected_category == category:\n",
-        "\n",
-        "                story_data = {\n",
-        "                    \"post_id\": story.get(\"id\"),\n",
-        "                    \"title\": title,\n",
-        "                    \"category\": category,\n",
-        "                    \"score\": story.get(\"score\", 0),\n",
-        "                    \"num_comments\": story.get(\"descendants\", 0),\n",
-        "                    \"author\": story.get(\"by\", \"unknown\"),\n",
-        "                    \"collected_at\": datetime.now().strftime(\"%Y-%m-%d %H:%M:%S\")\n",
-        "                }\n",
-        "\n",
-        "                collected_stories.append(story_data)\n",
-        "                category_count[category] += 1\n",
-        "\n",
-        "        # Required delay after each category\n",
-        "        time.sleep(2)\n",
-        "\n",
-        "    # ---------------------------------------------\n",
-        "    # SAVE TO JSON\n",
-        "    # ---------------------------------------------\n",
-        "\n",
-        "    os.makedirs(\"data\", exist_ok=True)\n",
-        "\n",
-        "    today_str = datetime.now().strftime('%Y%m%d')\n",
-        "    filename = f\"data/trends_{today_str}.json\"\n",
-        "\n",
-        "    with open(filename, \"w\", encoding=\"utf-8\") as file:\n",
-        "        json.dump(collected_stories, file, indent=4)\n",
-        "\n",
-        "    # ---------------------------------------------\n",
-        "    # FINAL OUTPUT (MATCHES REQUIREMENT EXACTLY)\n",
-        "    # ---------------------------------------------\n",
-        "\n",
-        "    print(f\"Collected {len(collected_stories)} stories. Saved to {filename}\")\n",
-        "\n",
-        "\n",
-        "# ---------------------------------------------\n",
-        "# RUN SCRIPT\n",
-        "# ---------------------------------------------\n",
-        "\n",
-        "if __name__ == \"__main__\":\n",
-        "    main()\"\"\"\n",
-        "\n",
-        "with open(\"task1_data_collection.py\", \"w\") as f:\n",
-        "    f.write(main_script_content)\n",
-        "\n",
-        "# Copy the main script to the new repository directory\n",
-        "shutil.copy(\"task1_data_collection.py\", os.path.join(repo_dir, \"task1_data_collection.py\"))\n",
-        "\n",
-        "# Copy the data folder to the new repository directory\n",
-        "# Remove existing data folder in the cloned repo to replace with new one\n",
-        "existing_data_path_in_repo = os.path.join(repo_dir, \"data\")\n",
-        "if os.path.exists(existing_data_path_in_repo):\n",
-        "    print(f\"Removing existing data folder in '{repo_dir}'...\")\n",
-        "    shutil.rmtree(existing_data_path_in_repo)\n",
-        "\n",
-        "if os.path.exists(\"data\"): # Check if the original data folder exists\n",
-        "    print(f\"Copying new data folder to '{repo_dir}'...\")\n",
-        "    shutil.copytree(\"data\", existing_data_path_in_repo)\n",
-        "else:\n",
-        "    print(\"No 'data' folder found to copy.\")\n",
-        "\n",
-        "# Change to the repository directory\n",
-        "%cd {repo_dir}\n",
-        "\n",
-        "# Add all changes (new/modified files) to the staging area\n",
-        "!git add .\n",
-        "\n",
-        "# Commit the changes\n",
-        "# Using --allow-empty-message and -m '' to commit if no changes (e.g., if only script was updated and data was the same)\n",
-        "!git commit -m \"Update: HackerNews TrendPulse script and data\" --allow-empty\n",
-        "\n",
-        "print(f\"Git repository updated and files committed in '{repo_dir}'\")"
-      ],
-      "execution_count": 14,
-      "outputs": [
-        {
-          "output_type": "stream",
-          "name": "stdout",
-          "text": [
-            "Cloning https://github.com/praveenvadde1250/trendpulse-vaddepraveen into 'trendpulse-vaddepraveen'...\n",
-            "Cloning into 'trendpulse-vaddepraveen'...\n",
-            "remote: Enumerating objects: 5, done.\u001b[K\n",
-            "remote: Counting objects: 100% (5/5), done.\u001b[K\n",
-            "remote: Compressing objects: 100% (4/4), done.\u001b[K\n",
-            "remote: Total 5 (delta 0), reused 5 (delta 0), pack-reused 0 (from 0)\u001b[K\n",
-            "Receiving objects: 100% (5/5), 6.76 KiB | 6.76 MiB/s, done.\n",
-            "Removing existing data folder in 'trendpulse-vaddepraveen'...\n",
-            "Copying new data folder to 'trendpulse-vaddepraveen'...\n",
-            "/content/trendpulse-vaddepraveen/trendpulse-vaddepraveen/trendpulse-vaddepraveen/trendpulse-vaddepraveen\n",
-            "[main ed588c3] Update: HackerNews TrendPulse script and data\n",
-            " 1 file changed, 137 insertions(+)\n",
-            " create mode 100644 task1_data_collection.py\n",
-            "Git repository updated and files committed in 'trendpulse-vaddepraveen'\n"
-          ]
-        }
-      ]
-    },
-    {
-      "cell_type": "markdown",
-      "metadata": {
-        "id": "574259d8"
-      },
-      "source": [
-        "### Step 2: Push to GitHub\n",
-        "\n",
-        "Now, provide your GitHub repository URL. It should look like `https://github.com/your-username/your-repo-name.git`. This will be used to push your code."
-      ]
-    },
-    {
-      "cell_type": "code",
-      "metadata": {
-        "colab": {
-          "base_uri": "https://localhost:8080/"
-        },
-        "id": "883f4ad7",
-        "outputId": "27f9cbd9-80fb-479c-c672-455bfffa7ca8"
-      },
-      "source": [
-        "# Push the changes to the main branch\n",
-        "# The remote 'origin' is already set by the git clone command in the previous cell.\n",
-        "# The GH_TOKEN is handled during the clone operation.\n",
-        "\n",
-        "# It's important to be in the correct directory (which should be handled by the previous cell's %cd)\n",
-        "!git push -u origin main\n",
-        "\n",
-        "print(\"Code and data pushed to GitHub!\")"
-      ],
-      "execution_count": 15,
-      "outputs": [
-        {
-          "output_type": "stream",
-          "name": "stdout",
-          "text": [
-            "Enumerating objects: 3, done.\n",
-            "Counting objects:  33% (1/3)\rCounting objects:  66% (2/3)\rCounting objects: 100% (3/3)\rCounting objects: 100% (3/3), done.\n",
-            "Delta compression using up to 2 threads\n",
-            "Compressing objects:  50% (1/2)\rCompressing objects: 100% (2/2)\rCompressing objects: 100% (2/2), done.\n",
-            "Writing objects:  50% (1/2)\rWriting objects: 100% (2/2)\rWriting objects: 100% (2/2), 324 bytes | 324.00 KiB/s, done.\n",
-            "Total 2 (delta 0), reused 0 (delta 0), pack-reused 0\n",
-            "To https://github.com/praveenvadde1250/trendpulse-vaddepraveen\n",
-            "   25cf609..ed588c3  main -> main\n",
-            "Branch 'main' set up to track remote branch 'main' from 'origin'.\n",
-            "Code and data pushed to GitHub!\n"
-          ]
-        }
-      ]
-    },
-    {
-      "cell_type": "code",
-      "source": [
-        "import pandas as pd\n",
-        "import os\n",
-        "from datetime import datetime\n",
-        "\n",
-        "# ---------------------------------------------\n",
-        "# STEP 1 — LOAD JSON FILE\n",
-        "# ---------------------------------------------\n",
-        "\n",
-        "# Find latest JSON file in data/ folder\n",
-        "data_folder = \"data\"\n",
-        "json_files = [f for f in os.listdir(data_folder) if f.startswith(\"trends_\") and f.endswith(\".json\")]\n",
-        "\n",
-        "if not json_files:\n",
-        "    print(\"No JSON files found in data/ folder.\")\n",
-        "    exit()\n",
-        "\n",
-        "# Pick latest file\n",
-        "latest_file = sorted(json_files)[-1]\n",
-        "file_path = os.path.join(data_folder, latest_file)\n",
-        "\n",
-        "# Load into DataFrame\n",
-        "df = pd.read_json(file_path)\n",
-        "\n",
-        "print(f\"Loaded {len(df)} stories from {file_path}\")\n",
-        "\n",
-        "# ---------------------------------------------\n",
-        "# STEP 2 — CLEAN THE DATA\n",
-        "# ---------------------------------------------\n",
-        "\n",
-        "# 1. Remove duplicates\n",
-        "df = df.drop_duplicates(subset=[\"post_id\"])\n",
-        "print(f\"After removing duplicates: {len(df)}\")\n",
-        "\n",
-        "# 2. Remove missing values\n",
-        "df = df.dropna(subset=[\"post_id\", \"title\", \"score\"])\n",
-        "print(f\"After removing nulls: {len(df)}\")\n",
-        "\n",
-        "# 3. Fix data types\n",
-        "df[\"score\"] = df[\"score\"].astype(int)\n",
-        "df[\"num_comments\"] = df[\"num_comments\"].astype(int)\n",
-        "\n",
-        "# 4. Remove low-quality stories (score < 5)\n",
-        "df = df[df[\"score\"] >= 5]\n",
-        "print(f\"After removing low scores: {len(df)}\")\n",
-        "\n",
-        "# 5. Strip whitespace from title\n",
-        "df[\"title\"] = df[\"title\"].str.strip()\n",
-        "\n",
-        "# ---------------------------------------------\n",
-        "# STEP 3 — SAVE AS CSV\n",
-        "# ---------------------------------------------\n",
-        "\n",
-        "output_file = os.path.join(data_folder, \"trends_clean.csv\")\n",
-        "df.to_csv(output_file, index=False)\n",
-        "\n",
-        "print(f\"\\nSaved {len(df)} rows to {output_file}\")\n",
-        "\n",
-        "# ---------------------------------------------\n",
-        "# SUMMARY — STORIES PER CATEGORY\n",
-        "# ---------------------------------------------\n",
-        "\n",
-        "print(\"\\nStories per category:\")\n",
-        "print(df[\"category\"].value_counts())"
-      ],
-      "metadata": {
-        "colab": {
-          "base_uri": "https://localhost:8080/"
-        },
-        "id": "vTpc69PDTSF9",
-        "outputId": "5b6445e8-c3af-4fae-8768-c4d21b4e9682"
-      },
-      "execution_count": 16,
-      "outputs": [
-        {
-          "output_type": "stream",
-          "name": "stdout",
-          "text": [
-            "Loaded 84 stories from data/trends_20260413.json\n",
-            "After removing duplicates: 84\n",
-            "After removing nulls: 84\n",
-            "After removing low scores: 83\n",
-            "\n",
-            "Saved 83 rows to data/trends_clean.csv\n",
-            "\n",
-            "Stories per category:\n",
-            "category\n",
-            "technology       25\n",
-            "entertainment    25\n",
-            "sports           14\n",
-            "worldnews        13\n",
-            "science           6\n",
-            "Name: count, dtype: int64\n"
-          ]
-        }
-      ]
-    }
-  ]
-}
+import pandas as pd
+import os
+from datetime import datetime
+
+# ---------------------------------------------
+# STEP 1 — LOAD JSON FILE
+# ---------------------------------------------
+
+# Ensure the data folder exists
+data_folder = "data"
+if not os.path.exists(data_folder):
+    os.makedirs(data_folder)
+    print(f"Created directory: {data_folder}")
+
+# Find latest JSON file in data/ folder
+json_files = [f for f in os.listdir(data_folder) if f.startswith("trends_") and f.endswith(".json")]
+
+if not json_files:
+    print("No JSON files found in data/ folder.")
+    # Optionally, you could create a dummy file or exit here
+    exit() # Exit if no files are found to prevent further errors
+
+# Pick latest file
+latest_file = sorted(json_files)[-1]
+file_path = os.path.join(data_folder, latest_file)
+
+# Load into DataFrame
+df = pd.read_json(file_path)
+
+print(f"Loaded {len(df)} stories from {file_path}")
+
+# ---------------------------------------------
+# STEP 2 — CLEAN THE DATA
+# ---------------------------------------------
+
+# 1. Remove duplicates
+df = df.drop_duplicates(subset=["post_id"])
+print(f"After removing duplicates: {len(df)}")
+
+# 2. Remove missing values
+df = df.dropna(subset=["post_id", "title", "score"])
+print(f"After removing nulls: {len(df)}")
+
+# 3. Fix data types
+df["score"] = df["score"].astype(int)
+df["num_comments"] = df["num_comments"].astype(int)
+
+# 4. Remove low-quality stories (score < 5)
+df = df[df["score"] >= 5]
+print(f"After removing low scores: {len(df)}")
+
+# 5. Strip whitespace from title
+df["title"] = df["title"].str.strip()
+
+# ---------------------------------------------
+# STEP 3 — SAVE AS CSV
+# ---------------------------------------------
+
+output_file = os.path.join(data_folder, "trends_clean.csv")
+df.to_csv(output_file, index=False)
+
+print(f"\nSaved {len(df)} rows to {output_file}")
+
+# ---------------------------------------------
+# SUMMARY — STORIES PER CATEGORY
+# ---------------------------------------------
+
+print("\nStories per category:")
+print(df["category"].value_counts())
